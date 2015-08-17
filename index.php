@@ -5,14 +5,15 @@
 <link rel="icon" type="image/png" href="images/favicon.png" />
 
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
-<meta property="og:url" content="" />
+<meta property="og:url" content="http://mixtapr.rocks" />
 <meta property="og:title" content="Mixtapr // A High Fidelity Inspired Spotify Mixtape Generator" />
-<meta name="description" content="" />
-<meta property="og:image" content="" />
-<meta property="og:site_name" content="" />
+<meta name="description" content="Send a friend a carefully considered Spotify playlist using Mixtapr, requiring you to make a little effort for a more rewarding playlist." />
+<meta property="og:image" content="http://mixtapr.rocks/images/og.jpg" />
+<meta property="og:site_name" content="Mixtapr" />
 <meta property="fb:admins" content="529506836"/>
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
 <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+<script type="text/javascript" src="js/jquery.datetimepicker.js"></script>
 <script src="//use.typekit.net/ldb1dco.js"></script>
 <script>try{Typekit.load();}catch(e){}</script>
 <link href='http://fonts.googleapis.com/css?family=Rock+Salt' rel='stylesheet' type='text/css'>
@@ -20,6 +21,7 @@
 <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
 <script type="text/javascript" src="js/soundmanager2-nodebug-jsmin.js"></script>
 <script type="text/javascript" src="js/jquery.marquee.min.js"></script>
+<link rel="stylesheet" href="js/jquery.datetimepicker.css" type="text/css" />
 <script type="text/javascript">
 var baseurl = "<? echo $baseurl; ?>";
 var spotifyapp = "<? echo $spotifyapp; ?>";
@@ -27,7 +29,9 @@ var accesstoken = "";
 var playlistid = "";
 var username = "";
 var useremail = "";
-
+var latestsnapshot = "";
+var playlistname = "";
+var playlisturi = "";
 
 /* Function to build a query string URL from an array, for the Spotify auth link */
   function toQueryString(obj) {
@@ -118,7 +122,14 @@ soundManager.onready(function() {
  		accesstoken = token;
       spotifyresponse(token); //Pass to the function to handle the Spotify response
 
+      console.log(accesstoken);
+
       $('#notebook h2').text('Tape for ' + tapefor);
+
+      playlistname = "Tape for " + tapefor;
+
+
+      $('#theirname').val(tapefor);
 
 
 
@@ -142,8 +153,18 @@ soundManager.onready(function() {
 	            username = spotifyresponse.id;
 	            useremail = spotifyresponse.email;
 	            var theirname = spotifyresponse.display_name;
-	            var nameparts = theirname.split(' ');
-	            $('#tracktext').text('Hi ' + nameparts[0])
+	            try{
+	            	var nameparts = theirname.split(' ');
+	            	var thename = nameparts[0];
+	            }catch(error){
+	            	var thename = username;
+	            }
+	            $('#tracktext').text('Hi ' + thename);
+
+	            ga('send', 'event', 'Mixtapr', 'Login',username + " - " + useremail);
+
+	            $('#yourname').val(thename);
+	            $('#youremail').val(useremail);
 
 	            $('#screen1').fadeOut('slow',function(){
 	            	$('#screen2').show();
@@ -160,6 +181,9 @@ soundManager.onready(function() {
 
 	$('#searchform').submit(function(){
 		$('#resultslist').text("Loading");
+
+		ga('send', 'event', 'Mixtapr', 'Search',$('#search').val());
+
 		$.ajax({
 		    url: 'https://api.spotify.com/v1/search?query=' + encodeURIComponent($('#search').val()) + '&type=track&market=from_token',
 		    headers: {
@@ -196,6 +220,8 @@ soundManager.onready(function() {
 				alert("There's no room left on your tape. Remove a song to make room.");
 			}
 
+			ga('send', 'event', 'Mixtapr', 'Added To Notepad',tracktitle);
+
 			$('.track:not(.full):first .notetracktitle').text(decodeURIComponent(tracktitle));
 			$('.track:not(.full):first').attr({'data-spotifyid':spotifyid,'data-previewurl':previewurl}).addClass('full');
 
@@ -215,6 +241,8 @@ soundManager.onready(function() {
 	        });
 			soundManager.play(trackid);
 			$(this).addClass('playing');
+			ga('send', 'event', 'Mixtapr', 'Preview',trackid);
+
 			return false;
 
 		});
@@ -240,6 +268,8 @@ soundManager.onready(function() {
 
 		$(document).on('click','.minus',function(){
 			$(this).closest('.tracks').append('<li class="track"><span class="notetracktitle"></span><div class="actions"><a href="#" class="up"><i class="fa fa-arrow-up"></i></a><a href="#" class="down"><i class="fa fa-arrow-down"></i></a><a href="#" class="minus"><i class="fa fa-minus"></i></a></li>');
+			var notetracktitle = $(this).closest('.notetracktitle').text();
+
 			$(this).closest('.track').remove();
 
 			setarrows();
@@ -247,6 +277,9 @@ soundManager.onready(function() {
 			if($('.full').length<1){
 				$('#record').addClass('disabled');
 			}
+
+			ga('send', 'event', 'Mixtapr', 'Removed from Notepad',notetracktitle);
+
 
 			return false;
 		});
@@ -285,6 +318,19 @@ soundManager.onready(function() {
 
 		$(document).on('click','#record:not(.disabled)',function(){
 
+			$('html,body').animate({'scrollTop':$(document).height()},1000);
+
+			$(this).addClass('disabled');
+			$('#finish').addClass('disabled');
+			$('#rewind').addClass('disabled');
+
+			var numberoftracks = $('.full:not(.recorded)').length;
+
+			console.log(numberoftracks);
+
+			ga('send', 'event', 'Mixtapr', 'Recording','Pressed Record',numberoftracks);
+
+
 			if(playlistid==""){
 				$.ajax({
 			    url: 'https://api.spotify.com/v1/users/' + username + '/playlists/',
@@ -296,10 +342,11 @@ soundManager.onready(function() {
 			    },
 			    success: function(r) {
 			    	playlistid = r.id;
-			    	console.log(playlistid);
+			    	playlisturi = r.uri;
+
 			    },
 			    error: function(r) {
-			      console.log(r);
+			      //console.log(r);
 			    }
 			   });
 			}
@@ -345,7 +392,11 @@ soundManager.onready(function() {
 		                          'Authorization': 'Bearer ' + accesstoken
 		                        },
 		                        success: function(r) {
-		                        	console.log("Recorded " + $('#' + thisid + ' .notetracktitle').text());
+		                        	//console.log("Recorded " + $('#' + thisid + ' .notetracktitle').text());
+		                        	var response = JSON.parse(r);
+		                        	latestsnapshot = response.snapshot_id;
+		                        	//console.log(response);
+		                        	//console.log(latestsnapshot);
 		                        },
 		                        error: function(r) {
 		                      		console.log("Failed " + $('#' + thisid + ' .notetracktitle').text());
@@ -354,9 +405,13 @@ soundManager.onready(function() {
 		                    });
 
 
-		            	setarrows();
-		            	if($('#' + thisid).next('.track.full').length>0){
-		            		var nextid = $('#' + thisid).next('.track.full').attr('id');
+		            	//setarrows();
+		            	//console.log('Number of tracks ' + $('.track.full').length);
+
+		            	//console.log('Number of remaining tracks ' + $('.track.full:not(.recorded)').length);
+
+		            	if($('.track.full:not(.recorded):first').length>0){
+		            		var nextid = $('.track.full:not(.recorded):first').attr('id');
 		            		soundManager.play('stoptape',{
 		            			multiShotEvents: true,
 		            			onfinish:function(){
@@ -375,7 +430,13 @@ soundManager.onready(function() {
 		            	}else{
 		            		soundManager.play('stoptape');
 		            		$('#playertext').hide();
-		            		alert("DONE");
+
+		            		$('#finish').removeClass('disabled');
+		            		$('#rewind').removeClass('disabled');
+		            		setarrows();
+
+
+		            		// alert("DONE");
 		            	}
 
 		            	if($('.full').length == $('.recorded').length){
@@ -406,32 +467,48 @@ soundManager.onready(function() {
 	
 	$(document).on('click','#rewind:not(.disabled)',function(){
 		$('#record').addClass('disabled');
+		$(this).addClass('disabled');
+		$('#finish').addClass('disabled');
+		$('#playertext').show();
+		$('#playertext .rectext').text('REW');
+		$('#counter').text('<<<');
+
+		ga('send', 'event', 'Mixtapr', 'Rewind','Rewind Track');
+
 		soundManager.play('rewind',{
 			multiShotEvents: true,
 			onfinish:function(){
-				$('.recorded:last').removeClass('recorded');
 
 				var url = 'https://api.spotify.com/v1/users/' + username +
 			      '/playlists/' + playlistid + '/tracks';
 
 			      var trackurl = 'spotify:track:' + $('.recorded:last').data('spotifyid');
-			      var trackpos = $('.recorded:last').index('.track');
+			      var trackpos = [$('.recorded:last').index('.track')];
 
-			      var spotifytracks = ['uri:' + trackurl,'positions:' + [trackpos]];
-			      console.log(spotifytracks);
+			    var spotifytracks = {'uri':trackurl,'positions':trackpos,'snapshot_id':latestsnapshot};
+			    var logdump = {'tracks':spotifytracks};
+			       //console.log(logdump);
 
 			      $.ajax({
 			        url: url,
 			        type: 'DELETE',
-			        data: JSON.stringify({'tracks':spotifytracks}),
+			        data: JSON.stringify(spotifytracks),
 			        headers: {
 			          'Authorization': 'Bearer ' + accesstoken
 			        },
 			        success: function(r) {
-			          console.log(r);
+			          $('#playertext').hide();
+			          $('.recorded:last').removeClass('recorded');
+			          if($('.recorded').length==0){
+			          	$('#rewind').addClass('disabled');
+			          }else{
+			          	$('#rewind').removeClass('disabled');
+			          }
+
+
 			        },
 			        error: function(r) {
-			        	console.log('error');
+			        	//console.log(r);
 			        }
 			      });
 
@@ -443,6 +520,77 @@ soundManager.onready(function() {
 			}
 		})
 		return false;
+	});
+
+	$(document).on('click','#finish',function(){
+
+		var totaltracks = $('.recorded').length;
+
+		console.log(totaltracks);
+
+		ga('send', 'event', 'Mixtapr', 'Finish','Total Tracks',totaltracks);
+
+
+		$('#spotifylink').attr('href',playlisturi);
+
+		var thedata = {};
+		thedata['accesstoken'] = accesstoken;
+		thedata['playlistid'] = playlistid;
+		thedata['playlisturi'] = playlisturi;
+		thedata['playlistname'] = playlistname;
+		console.log(thedata);
+		$.post("savetape.php", thedata).success(function(gotback){
+			console.log(gotback);
+			$('#tapeoutput img').attr('src',gotback.image);
+			$('#screen2').hide();
+			$('#screen3').show();
+			$('#playlistid').val(playlistid);
+			$('#playlisturi').val(playlisturi);
+		}).error(function(e){
+			console.log(e);
+		});
+
+		return false;
+
+	});
+
+	$(document).on('click','#sendimmediately_no',function(){
+		$('#when').slideDown();
+	});
+
+	$(document).on('click','#sendimmediately_yes',function(){
+		$('#when').slideUp();
+	});
+
+	jQuery('#whentosend').datetimepicker({minDate: 0,maxDate:'+1970/01/03'});
+
+	$('#send').submit(function(){
+
+
+
+		if($('#yourname').val()==""){
+			alert("Please enter your name");
+			return false;
+		}else if($('#youremail').val()==""){
+			alert("Please enter your email");
+			return false;
+		}else if($('#theiremail').val()==""){
+			alert("Please enter their email");
+			return false;
+		}else if($('#theirname').val()==""){
+			alert("Please enter their name");
+			return false;
+		}else{
+			$('#send').slideUp();
+			$.post( "send.php", $( "#send" ).serialize() ).success(function(response){
+				$('#alldone').html("<h1>Thanks for using Mixtapr</h1><p>We've sent your playlist and we've sent you a copy of the email</p><p><a href='" + playlisturi + "' target='_blank'>Click here</a> to open your playlist in Spotify, or listen below</p><p><iframe src='https://embed.spotify.com/?uri=" + playlisturi + "' width='300' height='380' frameborder='0' allowtransparency='true'></iframe></p>").slideDown();
+			});
+
+			ga('send', 'event', 'Mixtapr', 'Send',$('#yourname').val() + ' - Tape for ' + $('#theirname').val());
+			return false;
+		}
+
+
 	});
 
 });
@@ -463,8 +611,10 @@ function dosizes(){
 	var topheight = $('#top').outerHeight();
 
 
-	// if((bottomheight + topheight) < $(window).height()){
-	// 	$('#shelf').css({'margin-top':$(window).height()-bottomheight + 'px'});
+	// if($('#wrapper').height<$(window).height()){
+	// 	$('#shelf').addClass('absolute');
+	// }else{
+	// 	$('#shelf').removeClass('absolute');
 	// }
 }
 
@@ -474,19 +624,38 @@ $(window).resize(dosizes);
 </head>
 <style>
 body {
-	background: url('images/bgwall.jpg') top center;
-	background-size: cover;
+	background: url('images/bgwall.jpg') top center no-repeat #000;
+	background-size: 100% auto;
 	margin: 0;
 	padding: 0;
 	color: #fff;
 	font-size: 10pt;
 	font-family: "proxima-nova",sans-serif;
+	min-height: 100vh;
+}
+
+#top {
 }
 
 #shelf {
-	background: url('images/shelf.jpg') repeat-x center bottom;
+	background: url('images/shelfgradient.jpg') repeat-x center bottom;
 	padding-bottom: 218px;
 	text-align: center;
+	width: 100%;
+}
+
+#shelf.absolute {
+	position: absolute;
+		bottom: 0;
+		left: 0;
+}
+
+a {
+	color: #fff;
+}
+
+a:hover {
+	color: #eee;
 }
 
 #player {
@@ -544,6 +713,10 @@ body {
 
 #tape.recording {
 	background-position: bottom;
+}
+
+#screen1 {
+	/*display: none;*/
 }
 
 #screen1 h1 {
@@ -628,7 +801,7 @@ body {
 
 #notebook {
 	display: block;
-	background: url('images/notepad.png');
+	background: url('images/notepadsmaller.png');
 	width: 473px;
 	height: 562px;
 	float: left;
@@ -904,10 +1077,112 @@ body {
 	color: #990000;
 }
 
+#screen3 {
+	display: none;
+	background: rgba(0,0,0,0.6);
+	max-width: 820px;
+	margin: 0 auto;
+	width: 90%;
+	margin-bottom: 20px;
+	padding: 10px;
+	border-radius: 20px;
+	margin-top: 10px;
+}
 
+#tapeoutput {
+	width: 450px;
+	float: left;
+	margin-right: 20px;
+	margin-bottom: 10px;
+}
+
+#tapeoutput img {
+	width: 100%;
+	height: auto;
+	border: 2px solid #fff;
+}
+
+#finalise {
+	width: 330px;
+	float: left;
+}
+
+#finalise h1 {
+	margin: 0;
+	margin-bottom: 5px;
+	padding: 0;
+}
+
+#finalise label {
+	display: block;
+	margin-bottom: 4px;
+}
+
+#finalise .inputfield {
+	margin-bottom: 15px;
+	display: block;
+	font-size: 14pt;
+	padding: 4px;
+	width: 100%;
+	border: 0;
+	background: rgba(255,255,255,0.8);
+}
+
+#submit {
+	display: block;
+	text-transform: uppercase;
+	background: #ffcc00;
+	border-radius: 0;
+	padding: 5px;
+	width: 100%;
+	border: 0;
+	box-sizing: border-box;
+	color: #000;
+	font-weight: bold;
+	font-size: 14pt;
+}
+
+#submit:hover {
+	background: #990000;
+}
+
+#immediately label {
+	width: auto;
+	display: inline-block;
+	margin-right: 20px;
+	padding-bottom: 10px;
+}
+
+#when {
+	display: none;
+}
+
+#alldone {
+	display: none;
+}
+
+#termsetc {
+	font-size: 8pt;
+	padding: 20px;
+	width: 100%;
+	background: #000;
+	color: #fff;
+	text-align: center;
+}
 
 </style>
 <body>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-3299015-4', 'auto');
+  ga('send', 'pageview');
+
+</script>
+<div id="wrapper">
 <div id="top">
 	<div id="screen1">
 		<h1><img src="images/h1.png" alt="Mixtapr: A High Fidelity Inspired Spotify Mixtape Generator" /></h1>
@@ -967,6 +1242,48 @@ body {
 	<div style="clear: both;"></div>
 	</div>
 
+	<div id="screen3">
+		<div class="ninesixty">
+
+			<div id="tapeoutput">
+				<a href="#" id="spotifylink" target="_blank"><img src="images/tapebg.jpg" alt="Blank Tape" /></a>
+			</div>
+
+			<div id="finalise">
+				<form id="send" name="send" action="send.php" method="post">
+				<input type="hidden" name="playlistid" id="playlistid" />
+				<input type="hidden" name="playlisturi" id="playlisturi" />
+				<h1>Send your tape</h1>
+				<label for="yourname">Your Name</label>
+				<input type="text" name="yourname" id="yourname" class="inputfield" />
+				<label for="yourname">Your Email</label>
+				<input type="email" name="youremail" id="youremail" class="inputfield" />
+				<label for="theirname">Their Name</label>
+				<input type="name" name="theirname" id="theirname" class="inputfield" />
+				<label for="theiremail">Their Email</label>
+				<input type="email" name="theiremail" id="theiremail" class="inputfield" />
+				<label for="message">Message to include</label>
+				<textarea name="message" id="message" class="inputfield"></textarea>
+				<div id="immediately">
+				<input type="radio" name="sendimmediately" value="Yes" id="sendimmediately_yes" checked="checked" /><label for="sendimmediately_yes">Send Immediately</label>
+				<input type="radio" name="sendimmediately" value="No" id="sendimmediately_no" /><label for="sendimmediately_no">Delay Send</label>
+				</div>
+				<div id="when">
+					<label for="whentosend">When would you like to send your tape? (Max 3 days in the future)</label>
+					<input type="text" name="whentosend" id="whentosend" class="inputfield" />		
+				</div>
+				<input type="submit" name="submit" id="submit" value="Send" />
+				</form>
+				<div id="alldone">
+
+				</div>
+			</div>
+			
+		</div>
+		<div style="clear: both;"></div>
+	</div>
+
+
 </div>
 
 	<div id="shelf">
@@ -975,5 +1292,9 @@ body {
 			<div id="tape"></div>
 		</div>
 	</div>
+<div id="termsetc">
+Developed by <a href="http://twitter.com/willbeardmore">Will Beardmore</a>
+</div>
+</div>
 </body>
 </html>	
