@@ -12,7 +12,8 @@ User journey:
  Note, config.php file not included on GitHub, this is to remove API keys.
 
  Structure of file appears like so:
- ```<?
+ ```
+ <?
 
 /* Local environment detection */
 if($_SERVER['REMOTE_ADDR']=='127.0.0.1'){
@@ -26,4 +27,5 @@ if($_SERVER['REMOTE_ADDR']=='127.0.0.1'){
 }
 
 $mailgunkey = "";
-?>```
+?>
+```
